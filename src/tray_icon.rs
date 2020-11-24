@@ -4,10 +4,16 @@ pub fn show_tray_icon() -> Result<(), systray::Error> {
         Ok(w) => app = w,
         Err(_) => panic!("Can't create window!"),
     }
-    app.set_icon_from_file(
+    let err = app.set_icon_from_file(
         &"C:\\Users\\przem\\Projects\\rust\\systray-rs\\resources\\rust.ico".to_string(),
     );
-    app.set_tooltip(&"Whatever".to_string());
+    if err.is_err() {
+        return err;
+    }
+    let err = app.set_tooltip(&"Whatever".to_string());
+    if err.is_err() {
+        return err;
+    }
 
     app.add_menu_item("Print a thing", |_| {
         println!("Printing a thing!");
