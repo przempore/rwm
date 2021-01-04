@@ -125,11 +125,19 @@ fn is_alt_tab_window(hwnd: HWND) -> bool {
         return false;
     }
 
+    if is_iconic(hwnd) {
+        return false;
+    }
+
     true
 }
 
 fn is_core_window(hwnd: HWND) -> bool {
     get_class_name(hwnd) == "Windows.UI.Core.CoreWindow"
+}
+
+fn is_iconic(hwnd: HWND) -> bool {
+    unsafe { IsIconic(hwnd) == TRUE }
 }
 
 fn get_class_name(hwnd: HWND) -> String {
@@ -153,16 +161,22 @@ unsafe extern "system" fn enum_proc(hwnd: HWND, _l_param: LPARAM) -> BOOL {
     }
     if GetWindowTextW(hwnd, &mut buf[0], SIZE as i32) > 0 {
         let win_text = decode(&buf);
-        if IsIconic(hwnd) == FALSE {
-            print!(". {} | ", win_text);
-            println!(
-                "--- DEBUG --- | is_alt_tab_window: {}",
-                is_alt_tab_window(hwnd)
-            );
-            print_window_thread_process_id(hwnd);
-        } else {
-            println!("--- {} is a minimalized window.", win_text);
-        }
+        println!(
+            "is {} alt tab window: {}",
+            win_text,
+            is_alt_tab_window(hwnd)
+        );
+        // let win_text = decode(&buf);
+        // if IsIconic(hwnd) == FALSE {
+        //     print!(". {} | ", win_text);
+        //     println!(
+        //         "--- DEBUG --- | is_alt_tab_window: {}",
+        //         is_alt_tab_window(hwnd)
+        //     );
+        //     print_window_thread_process_id(hwnd);
+        // } else {
+        //     println!("--- {} is a minimalized window.", win_text);
+        // }
     }
     TRUE
 }
