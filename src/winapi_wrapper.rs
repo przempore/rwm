@@ -1,26 +1,13 @@
-use std::char::{decode_utf16, REPLACEMENT_CHARACTER};
+use std::ffi::CString;
 use std::ptr::null_mut;
-use winapi::um::winuser::{GetAncestor, GetLastActivePopup, GA_ROOTOWNER};
-
-use libc::c_void;
-use winapi::{
-    shared::minwindef::DWORD, shared::minwindef::HINSTANCE, um::errhandlingapi::GetLastError,
-};
+use winapi::um::winuser::{GetPropA, GetWindow, GetWindowLongPtrA};
 
 use winapi::{
     shared::{
-        minwindef::{BOOL, FALSE, LPARAM, TRUE},
+        minwindef::{BOOL, LPARAM, TRUE},
         windef::HWND,
     },
-    um::{
-        processthreadsapi::OpenProcess,
-        psapi::{EnumProcessModules, GetModuleBaseNameA},
-        winnt::{PROCESS_QUERY_INFORMATION, PROCESS_VM_READ},
-        winuser::{
-            EnumDesktopWindows, EnumWindows, GetClassNameA, GetWindowTextW,
-            GetWindowThreadProcessId, IsIconic, IsWindowVisible,
-        },
-    },
+    um::winuser::{EnumDesktopWindows, GetClassNameA, GetWindowTextW, IsIconic, IsWindowVisible},
 };
 
 pub fn list_all_windows() {
@@ -30,114 +17,107 @@ pub fn list_all_windows() {
     }
 }
 
-unsafe extern "system" fn print_window_thread_process_id(hwnd: HWND) {
-    let mut process_id: u32 = 0;
-    let thread_id = GetWindowThreadProcessId(hwnd, &mut process_id);
-    print!("thread: {}, pid: {}", thread_id, process_id);
-    print_process_name_and_id(process_id);
-}
-
-// fn get_alt_tab_info(hwnd: HWND) {
-//     unsafe {
-//         let mut pati: PALTTABINFO = null_mut();
-//         const SIZE: u32 = 1024;
-//         let mut buf = vec![0i8; SIZE as usize];
-//         let is_success = GetAltTabInfoA(hwnd, -1, pati, &mut buf[0], SIZE);
-//         if is_success == FALSE {
-//             println!("Failed to GetAltTabInfoA");
-//         }
-//     }
-// }
-
-unsafe extern "system" fn print_process_name_and_id(process_id: u32) {
-    let h_process = OpenProcess(PROCESS_QUERY_INFORMATION | PROCESS_VM_READ, 0, process_id);
-    if h_process.is_null() {
-        return;
-    }
-    const SIZE: u32 = 1024;
-    let h_mod: [*mut c_void; SIZE as usize] = [0 as *mut c_void; SIZE as usize];
-    let mut cb_needed: DWORD = 0;
-    let mut buf = vec![0i8; SIZE as usize];
-    let instance: HINSTANCE = null_mut();
-    if EnumProcessModules(
-        h_process,
-        h_mod.as_ptr() as *mut HINSTANCE,
-        SIZE,
-        &mut cb_needed,
-    ) == TRUE
-    {
-        let index: usize = 0x0;
-        let buff_size = GetModuleBaseNameA(h_process, instance, &mut buf[index], SIZE);
-        print!(" | buff_size: {}", buff_size);
-        if buff_size == 0 {
-            println!("GetModuleBaseNameA failed");
-        }
-        println!(
-            " | name: {}",
-            String::from_utf8(buf.iter().map(|&c| c as u8).collect()).unwrap()
-        );
-    } else {
-        println!("EnumProcessModules failed! LastError: {}", GetLastError());
-    }
-}
-
-// algorithm from https://devblogs.microsoft.com/oldnewthing/20071008-00/?p=24863
-unsafe extern "system" fn is_alt_tab_window_from_blog(hwnd: HWND) -> bool {
-    let mut hwnd_walk = GetAncestor(hwnd, GA_ROOTOWNER);
-    let mut hwnd_try: HWND;
-    loop {
-        hwnd_try = GetLastActivePopup(hwnd_walk);
-        if hwnd_try == hwnd_walk {
-            break;
-        }
-        if IsWindowVisible(hwnd_try) == TRUE {
-            break;
-        }
-        hwnd_walk = hwnd_try;
-    }
-
-    hwnd_walk == hwnd
-}
-
 fn is_alt_tab_window(hwnd: HWND) -> bool {
     // todo: distinguish between active desktop
     /*
-        if (IsAppWindow()) return true;
-        if (IsToolWindow()) return false;
-        if (IsNoActivate()) return false;
-        if (!IsOwnerOrOwnerNotVisible()) return false;
-        if (HasITaskListDeletedProperty()) return false;
         if (IsApplicationFrameWindow() && !HasAppropriateApplicationViewCloakType()) return false;
     */
-    unsafe {
-        if IsWindowVisible(hwnd) == FALSE {
-            return false;
-        }
+    if !is_visible(hwnd) {
+        return false;
+    }
 
-        const SIZE: usize = 1024;
-        let mut buf = [0u16; SIZE];
-        if GetWindowTextW(hwnd, &mut buf[0], SIZE as i32) <= 0 {
-            return false;
-        };
+    if get_window_title(hwnd) == None {
+        return false;
     }
 
     if is_core_window(hwnd) {
         return false;
     }
 
-    if is_iconic(hwnd) {
+    if is_app_window(hwnd) {
+        return true;
+    }
+
+    if is_tool_window(hwnd) {
         return false;
+    }
+
+    if is_no_activate(hwnd) {
+        return false;
+    }
+
+    if has_i_task_list_deleted_property(hwnd) {
+        return false;
+    }
+
+    if is_application_frame_window(hwnd) && !has_appropriate_application_view_cloak_type(hwnd) {
+        if let Some(title) = get_window_title(hwnd) {
+            println!("--- DEBUG --- | name: {}", title);
+        }
+        return false;
+    }
+
+    let window_owner = get_window_owner(hwnd);
+    if let Some(wo) = window_owner {
+        if !is_visible(wo) {
+            return false;
+        }
     }
 
     true
 }
 
+fn is_visible(hwnd: HWND) -> bool {
+    unsafe { IsWindowVisible(hwnd) == TRUE }
+}
+
+fn get_window_title(hwnd: HWND) -> Option<String> {
+    unsafe {
+        const SIZE: usize = 1024;
+        let mut buf = [0u16; SIZE];
+        let title_name_len = GetWindowTextW(hwnd, &mut buf[0], SIZE as i32);
+        if title_name_len == 0 {
+            return None;
+        }
+        let title_name = String::from_utf8(buf.iter().map(|&c| c as u8).collect()).unwrap();
+        Some(String::from(truncate(&title_name, title_name_len as usize)))
+    }
+}
+
 fn is_core_window(hwnd: HWND) -> bool {
-    get_class_name(hwnd) == "Windows.UI.Core.CoreWindow"
+    get_class_name(hwnd) == "Windows.UI.Core.CoreWindow".to_string()
+}
+
+fn is_application_frame_window(hwnd: HWND) -> bool {
+    get_class_name(hwnd) == "ApplicationFrameWindow".to_string()
+}
+
+fn has_appropriate_application_view_cloak_type(_hwnd: HWND) -> bool {
+    true
+}
+
+fn get_window_owner(hwnd: HWND) -> Option<HWND> {
+    unsafe {
+        const GW_OWNER: u32 = 4;
+        let handle = GetWindow(hwnd, GW_OWNER);
+
+        if handle.is_null() {
+            return None;
+        }
+
+        Some(handle)
+    }
 }
 
 fn is_iconic(hwnd: HWND) -> bool {
     unsafe { IsIconic(hwnd) == TRUE }
+}
+
+fn truncate(s: &str, max_chars: usize) -> &str {
+    match s.char_indices().nth(max_chars) {
+        None => s,
+        Some((idx, _)) => &s[..idx],
+    }
 }
 
 fn get_class_name(hwnd: HWND) -> String {
@@ -146,43 +126,60 @@ fn get_class_name(hwnd: HWND) -> String {
         const SIZE: usize = 1024;
         let mut buf = [0i8; SIZE];
 
-        if GetClassNameA(hwnd, &mut buf[0], SIZE as i32) > 0 {
-            class_name = String::from_utf8(buf.iter().map(|&c| c as u8).collect()).unwrap()
+        let class_name_len = GetClassNameA(hwnd, &mut buf[0], SIZE as i32);
+        if class_name_len > 0 {
+            class_name = String::from_utf8(buf.iter().map(|&c| c as u8).collect()).unwrap();
+            class_name = String::from(truncate(&class_name, class_name_len as usize));
         }
     }
     return class_name;
 }
 
-unsafe extern "system" fn enum_proc(hwnd: HWND, _l_param: LPARAM) -> BOOL {
-    const SIZE: usize = 1024;
-    let mut buf = [0u16; SIZE];
-    if IsWindowVisible(hwnd) == FALSE {
-        return TRUE;
+fn is_app_window(hwnd: HWND) -> bool {
+    const GWL_EXSTYLE: i32 = -20;
+    const APPWINDOW: isize = 0x00040000;
+    unsafe {
+        let flag = GetWindowLongPtrA(hwnd, GWL_EXSTYLE);
+        flag == APPWINDOW
     }
-    if GetWindowTextW(hwnd, &mut buf[0], SIZE as i32) > 0 {
-        let win_text = decode(&buf);
-        println!(
-            "is {} alt tab window: {}",
-            win_text,
-            is_alt_tab_window(hwnd)
-        );
-        // let win_text = decode(&buf);
-        // if IsIconic(hwnd) == FALSE {
-        //     print!(". {} | ", win_text);
-        //     println!(
-        //         "--- DEBUG --- | is_alt_tab_window: {}",
-        //         is_alt_tab_window(hwnd)
-        //     );
-        //     print_window_thread_process_id(hwnd);
-        // } else {
-        //     println!("--- {} is a minimalized window.", win_text);
-        // }
-    }
-    TRUE
 }
 
-fn decode(source: &[u16]) -> String {
-    decode_utf16(source.iter().take_while(|&i| *i != 0).cloned())
-        .map(|r| r.unwrap_or(REPLACEMENT_CHARACTER))
-        .collect()
+fn is_tool_window(hwnd: HWND) -> bool {
+    const GWL_EXSTYLE: i32 = -20;
+    const GWL_STYLE: i32 = -16;
+    const TOOLWINDOW: isize = 0x00000080;
+
+    let mut ret: bool;
+    unsafe {
+        let ex_style_flag = GetWindowLongPtrA(hwnd, GWL_EXSTYLE);
+        ret = ex_style_flag == TOOLWINDOW;
+
+        let style_flag = GetWindowLongPtrA(hwnd, GWL_STYLE);
+        ret |= style_flag == TOOLWINDOW;
+    }
+    return ret;
+}
+
+fn is_no_activate(hwnd: HWND) -> bool {
+    const NOACTIVATE: isize = 0x08000000;
+    const GWL_EXSTYLE: i32 = -20;
+    unsafe {
+        let ex_style_flag = GetWindowLongPtrA(hwnd, GWL_EXSTYLE);
+        ex_style_flag == NOACTIVATE
+    }
+}
+
+fn has_i_task_list_deleted_property(hwnd: HWND) -> bool {
+    let c_to_print = CString::new("ITaskList_Deleted").expect("CString::new failed");
+    unsafe { !GetPropA(hwnd, c_to_print.as_ptr()).is_null() }
+}
+
+unsafe extern "system" fn enum_proc(hwnd: HWND, _l_param: LPARAM) -> BOOL {
+    if is_alt_tab_window(hwnd) {
+        if let Some(win_title) = get_window_title(hwnd) {
+            println!("{}", win_title);
+        }
+    }
+
+    TRUE
 }
