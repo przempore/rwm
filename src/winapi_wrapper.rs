@@ -1,3 +1,4 @@
+use std::str::Utf8Error;
 use std::ffi::CString;
 use std::ptr::null_mut;
 use winapi::um::winuser::{GetPropA, GetWindow, GetWindowLongPtrA};
@@ -51,9 +52,8 @@ fn is_alt_tab_window(hwnd: HWND) -> bool {
     }
 
     if is_application_frame_window(hwnd) && !has_appropriate_application_view_cloak_type(hwnd) {
-        if let Some(title) = get_window_title(hwnd) {
-            println!("--- DEBUG --- | name: {}", title);
-        }
+        let title, error = get_window_title(hwnd);
+        
         return false;
     }
 
@@ -71,7 +71,7 @@ fn is_visible(hwnd: HWND) -> bool {
     unsafe { IsWindowVisible(hwnd) == TRUE }
 }
 
-fn get_window_title(hwnd: HWND) -> Option<String> {
+fn get_window_title(hwnd: HWND) -> Result<String, Utf8Error> {
     unsafe {
         const SIZE: usize = 1024;
         let mut buf = [0u16; SIZE];
@@ -79,7 +79,8 @@ fn get_window_title(hwnd: HWND) -> Option<String> {
         if title_name_len == 0 {
             return None;
         }
-        let title_name = String::from_utf8(buf.iter().map(|&c| c as u8).collect()).unwrap();
+        let txt = buf.iter().map(|&c| c as u8).collect();
+        let title_name = String::from_utf8(txt)?
         Some(String::from(truncate(&title_name, title_name_len as usize)))
     }
 }
@@ -128,7 +129,11 @@ fn get_class_name(hwnd: HWND) -> String {
 
         let class_name_len = GetClassNameA(hwnd, &mut buf[0], SIZE as i32);
         if class_name_len > 0 {
-            class_name = String::from_utf8(buf.iter().map(|&c| c as u8).collect()).unwrap();
+            let txt = buf.iter().map(|&c| c as u8).collect();
+            class_name = String::from_utf8(txt).unwrap_or_else(|error| {
+                println!("Windows title error: {}", error);
+                "Incorrect window title!".to_string()
+            });
             class_name = String::from(truncate(&class_name, class_name_len as usize));
         }
     }
