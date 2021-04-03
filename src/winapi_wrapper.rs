@@ -1,4 +1,3 @@
-use std::str::Utf8Error;
 use std::ffi::CString;
 use std::ptr::null_mut;
 use winapi::um::winuser::{GetPropA, GetWindow, GetWindowLongPtrA};
@@ -27,7 +26,8 @@ fn is_alt_tab_window(hwnd: HWND) -> bool {
         return false;
     }
 
-    if let Err(error) = get_window_title(hwnd) {
+    let window_title = get_window_title(hwnd);
+    if let Err(_) = window_title {
         return false;
     }
 
@@ -52,8 +52,7 @@ fn is_alt_tab_window(hwnd: HWND) -> bool {
     }
 
     if is_application_frame_window(hwnd) && !has_appropriate_application_view_cloak_type(hwnd) {
-        if let Ok(title) = get_window_title(hwnd) {
-            println!("{}", title);
+        if let Ok(_) = window_title {
             return true;
         }
 
@@ -77,7 +76,7 @@ fn is_visible(hwnd: HWND) -> bool {
 #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub enum WindowError {
     NotFound,
-
+    CannotConvert,
 }
 
 fn get_window_title(hwnd: HWND) -> Result<String, WindowError> {
@@ -88,9 +87,13 @@ fn get_window_title(hwnd: HWND) -> Result<String, WindowError> {
         if title_name_len == 0 {
             return Err(WindowError::NotFound);
         }
-        let txt = buf.iter().map(|&c| c as u8).collect();
-        let title_name = String::from_utf8(txt).unwrap_or_default();
-        Ok(String::from(truncate(&title_name, title_name_len as usize)))
+        let txt: Vec<u8> = buf.iter().map(|&c| c as u8).collect();
+        match String::from_utf8(txt.clone()) {
+            Ok(name) => Ok(format!("{}", truncate(&name, title_name_len as usize))),
+            Err(e) => {
+                Ok(String::from_utf8_lossy(&txt).into_owned())
+            },
+        }
     }
 }
 
@@ -103,6 +106,7 @@ fn is_application_frame_window(hwnd: HWND) -> bool {
 }
 
 fn has_appropriate_application_view_cloak_type(_hwnd: HWND) -> bool {
+    // FIXME
     true
 }
 
@@ -190,9 +194,10 @@ fn has_i_task_list_deleted_property(hwnd: HWND) -> bool {
 
 unsafe extern "system" fn enum_proc(hwnd: HWND, _l_param: LPARAM) -> BOOL {
     if is_alt_tab_window(hwnd) {
-        if let Ok(win_title) = get_window_title(hwnd) {
-            println!("{}", win_title);
-        }
+        match get_window_title(hwnd) {
+            Ok(title) => println!("-> {}", title),
+            Err(err) => println!("error: {:?}", err),
+        };
     }
 
     TRUE
