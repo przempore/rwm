@@ -1,5 +1,4 @@
 use std::ffi::CString;
-use std::ptr::null_mut;
 use winapi::um::winuser::{GetPropA, GetWindow, GetWindowLongPtrA};
 
 use winapi::{
@@ -7,13 +6,15 @@ use winapi::{
         minwindef::{BOOL, LPARAM, TRUE},
         windef::HWND,
     },
-    um::winuser::{EnumDesktopWindows, GetClassNameA, GetWindowTextW, IsIconic, IsWindowVisible},
+    um::{
+        winuser::{EnumDesktopWindows, GetClassNameA, GetWindowTextW, IsIconic, IsWindowVisible, GetThreadDesktop},
+        processthreadsapi::GetCurrentThreadId,
+    }
 };
 
 pub fn list_all_windows() {
     unsafe {
-        // EnumWindows(Some(enum_proc), 0);
-        EnumDesktopWindows(null_mut(), Some(enum_proc), 0);
+        EnumDesktopWindows(GetThreadDesktop(GetCurrentThreadId()), Some(enum_proc), 0);
     }
 }
 
@@ -76,7 +77,6 @@ fn is_visible(hwnd: HWND) -> bool {
 #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub enum WindowError {
     NotFound,
-    CannotConvert,
 }
 
 fn get_window_title(hwnd: HWND) -> Result<String, WindowError> {
@@ -90,9 +90,7 @@ fn get_window_title(hwnd: HWND) -> Result<String, WindowError> {
         let txt: Vec<u8> = buf.iter().map(|&c| c as u8).collect();
         match String::from_utf8(txt.clone()) {
             Ok(name) => Ok(format!("{}", truncate(&name, title_name_len as usize))),
-            Err(e) => {
-                Ok(String::from_utf8_lossy(&txt).into_owned())
-            },
+            Err(_) => Ok(String::from_utf8_lossy(&txt).into_owned()),
         }
     }
 }
