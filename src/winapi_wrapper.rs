@@ -152,25 +152,22 @@ fn get_class_name(hwnd: HWND) -> String {
 }
 
 fn is_app_window(hwnd: HWND) -> bool {
-    const APPWINDOW: isize = 0x00040000;
     let flag = unsafe { GetWindowLongPtrA(hwnd, GWL_EXSTYLE) };
-    flag == APPWINDOW
+    flag == WS_EX_APPWINDOW as isize
 }
 
 fn is_tool_window(hwnd: HWND) -> bool {
-    const TOOLWINDOW: isize = 0x00000080;
     let ex_style_flag = unsafe { GetWindowLongPtrA(hwnd, GWL_EXSTYLE) };
-    let mut ret = ex_style_flag == TOOLWINDOW;
+    let mut ret = ex_style_flag == WS_EX_TOOLWINDOW as isize;
     let style_flag = unsafe { GetWindowLongPtrA(hwnd, GWL_STYLE) };
-    ret |= style_flag == TOOLWINDOW;
+    ret |= style_flag == WS_EX_TOOLWINDOW as isize;
 
     ret
 }
 
 fn is_no_activate(hwnd: HWND) -> bool {
-    const NOACTIVATE: isize = 0x08000000;
     let ex_style_flag = unsafe { GetWindowLongPtrA(hwnd, GWL_EXSTYLE) };
-    ex_style_flag == NOACTIVATE
+    ex_style_flag == WS_EX_NOACTIVATE as isize
 }
 
 fn has_i_task_list_deleted_property(hwnd: HWND) -> bool {
