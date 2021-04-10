@@ -96,6 +96,6 @@ jobs:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       with:
         upload_url: ${{ steps.set_upload_url.outputs.upload_url }}
-        asset_path: artifacts/RWM/RWM.exe
+        asset_path: artifacts/RWM/rwm.exe
         asset_name: RWM.exe
         asset_content_type: application/exe
