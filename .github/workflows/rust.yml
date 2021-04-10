@@ -89,3 +89,13 @@ jobs:
         asset_path: RWM.zip
         asset_name: RWM.zip
         asset_content_type: application/zip
+
+    - name: Upload Release exe Asset
+      uses: actions/upload-release-asset@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ steps.set_upload_url.outputs.upload_url }}
+        asset_path: artifacts/RWM/RWM.exe
+        asset_name: RWM.exe
+        asset_content_type: application/exe
