@@ -1,15 +1,16 @@
 use std::ffi::CString;
-use winapi::um::winuser::{GetPropA, GetWindow, GetWindowLongPtrA};
+use std::mem;
 
 use winapi::{
     shared::{
-        minwindef::{BOOL, LPARAM, TRUE},
+        minwindef::{BOOL, DWORD, LPARAM, LPVOID, TRUE},
         windef::HWND,
     },
     um::{
-        winuser::{EnumDesktopWindows, GetClassNameA, GetWindowTextW, IsIconic, IsWindowVisible, GetThreadDesktop},
+        dwmapi::{DwmGetWindowAttribute, DWMWA_CLOAKED},
         processthreadsapi::GetCurrentThreadId,
-    }
+        winuser::*,
+    },
 };
 
 pub fn list_all_windows() {
@@ -52,7 +53,10 @@ fn is_alt_tab_window(hwnd: HWND) -> bool {
         return false;
     }
 
-    if is_application_frame_window(hwnd) && !has_appropriate_application_view_cloak_type(hwnd) {
+    if is_application_frame_window(hwnd) {
+        if !has_appropriate_application_view_cloak_type(hwnd) {
+            return false;
+        };
         if let Ok(_) = window_title {
             return true;
         }
@@ -75,23 +79,22 @@ fn is_visible(hwnd: HWND) -> bool {
 }
 
 #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
-pub enum WindowError {
+enum WindowError {
     NotFound,
 }
 
 fn get_window_title(hwnd: HWND) -> Result<String, WindowError> {
-    unsafe {
-        const SIZE: usize = 1024;
-        let mut buf = [0u16; SIZE];
-        let title_name_len = GetWindowTextW(hwnd, &mut buf[0], SIZE as i32);
-        if title_name_len == 0 {
-            return Err(WindowError::NotFound);
-        }
-        let txt: Vec<u8> = buf.iter().map(|&c| c as u8).collect();
-        match String::from_utf8(txt.clone()) {
-            Ok(name) => Ok(format!("{}", truncate(&name, title_name_len as usize))),
-            Err(_) => Ok(String::from_utf8_lossy(&txt).into_owned()),
-        }
+    const SIZE: usize = 1024;
+    let mut buf = [0u16; SIZE];
+
+    let title_name_len = unsafe { GetWindowTextW(hwnd, &mut buf[0], SIZE as i32) };
+    if title_name_len == 0 {
+        return Err(WindowError::NotFound);
+    }
+    let txt: Vec<u8> = buf.iter().map(|&c| c as u8).collect();
+    match String::from_utf8(txt.clone()) {
+        Ok(name) => Ok(format!("{}", truncate(&name, title_name_len as usize))),
+        Err(_) => Ok(String::from_utf8_lossy(&txt).into_owned()),
     }
 }
 
@@ -103,22 +106,22 @@ fn is_application_frame_window(hwnd: HWND) -> bool {
     get_class_name(hwnd) == "ApplicationFrameWindow".to_string()
 }
 
-fn has_appropriate_application_view_cloak_type(_hwnd: HWND) -> bool {
-    // FIXME
-    true
+fn has_appropriate_application_view_cloak_type(hwnd: HWND) -> bool {
+    match is_cloaked(hwnd) {
+        Ok(ok) => ok == 0,
+        Err(_) => false,
+    }
 }
 
 fn get_window_owner(hwnd: HWND) -> Option<HWND> {
-    unsafe {
-        const GW_OWNER: u32 = 4;
-        let handle = GetWindow(hwnd, GW_OWNER);
+    const GW_OWNER: u32 = 4;
+    let handle = unsafe { GetWindow(hwnd, GW_OWNER) };
 
-        if handle.is_null() {
-            return None;
-        }
-
-        Some(handle)
+    if handle.is_null() {
+        return None;
     }
+
+    Some(handle)
 }
 
 fn is_iconic(hwnd: HWND) -> bool {
@@ -134,60 +137,63 @@ fn truncate(s: &str, max_chars: usize) -> &str {
 
 fn get_class_name(hwnd: HWND) -> String {
     let mut class_name = String::new();
-    unsafe {
-        const SIZE: usize = 1024;
-        let mut buf = [0i8; SIZE];
-
-        let class_name_len = GetClassNameA(hwnd, &mut buf[0], SIZE as i32);
-        if class_name_len > 0 {
-            let txt = buf.iter().map(|&c| c as u8).collect();
-            class_name = String::from_utf8(txt).unwrap_or_else(|error| {
-                println!("Windows title error: {}", error);
-                "Incorrect window title!".to_string()
-            });
-            class_name = String::from(truncate(&class_name, class_name_len as usize));
-        }
+    const SIZE: usize = 1024;
+    let mut buf = [0i8; SIZE];
+    let class_name_len = unsafe { GetClassNameA(hwnd, &mut buf[0], SIZE as i32) };
+    if class_name_len > 0 {
+        let txt = buf.iter().map(|&c| c as u8).collect();
+        class_name = String::from_utf8(txt).unwrap_or_else(|error| {
+            println!("Windows title error: {}", error);
+            "Incorrect window title!".to_string()
+        });
+        class_name = String::from(truncate(&class_name, class_name_len as usize));
     }
     return class_name;
 }
 
 fn is_app_window(hwnd: HWND) -> bool {
-    const GWL_EXSTYLE: i32 = -20;
     const APPWINDOW: isize = 0x00040000;
-    unsafe {
-        let flag = GetWindowLongPtrA(hwnd, GWL_EXSTYLE);
-        flag == APPWINDOW
-    }
+    let flag = unsafe { GetWindowLongPtrA(hwnd, GWL_EXSTYLE) };
+    flag == APPWINDOW
 }
 
 fn is_tool_window(hwnd: HWND) -> bool {
-    const GWL_EXSTYLE: i32 = -20;
-    const GWL_STYLE: i32 = -16;
     const TOOLWINDOW: isize = 0x00000080;
+    let ex_style_flag = unsafe { GetWindowLongPtrA(hwnd, GWL_EXSTYLE) };
+    let mut ret = ex_style_flag == TOOLWINDOW;
+    let style_flag = unsafe { GetWindowLongPtrA(hwnd, GWL_STYLE) };
+    ret |= style_flag == TOOLWINDOW;
 
-    let mut ret: bool;
-    unsafe {
-        let ex_style_flag = GetWindowLongPtrA(hwnd, GWL_EXSTYLE);
-        ret = ex_style_flag == TOOLWINDOW;
-
-        let style_flag = GetWindowLongPtrA(hwnd, GWL_STYLE);
-        ret |= style_flag == TOOLWINDOW;
-    }
-    return ret;
+    ret
 }
 
 fn is_no_activate(hwnd: HWND) -> bool {
     const NOACTIVATE: isize = 0x08000000;
-    const GWL_EXSTYLE: i32 = -20;
-    unsafe {
-        let ex_style_flag = GetWindowLongPtrA(hwnd, GWL_EXSTYLE);
-        ex_style_flag == NOACTIVATE
-    }
+    let ex_style_flag = unsafe { GetWindowLongPtrA(hwnd, GWL_EXSTYLE) };
+    ex_style_flag == NOACTIVATE
 }
 
 fn has_i_task_list_deleted_property(hwnd: HWND) -> bool {
     let c_to_print = CString::new("ITaskList_Deleted").expect("CString::new failed");
     unsafe { !GetPropA(hwnd, c_to_print.as_ptr()).is_null() }
+}
+
+fn is_cloaked(hwnd: HWND) -> Result<i32, String> {
+    let mut pv_attribute = unsafe { mem::MaybeUninit::<i32>::zeroed().assume_init() };
+    let (ret, pv_attribute) = unsafe {
+        let ret = DwmGetWindowAttribute(
+            hwnd,
+            DWMWA_CLOAKED,
+            &mut pv_attribute as *mut _ as LPVOID,
+            mem::size_of::<i32>() as DWORD,
+        );
+        (ret, pv_attribute)
+    };
+
+    match ret {
+        0 => Ok(pv_attribute),                              // Wrapped attribute.
+        _ => Err(format!("Returned HRESULT: 0x{:x}", ret)), // an invalid handle, or type size for the given attribute?
+    }
 }
 
 unsafe extern "system" fn enum_proc(hwnd: HWND, _l_param: LPARAM) -> BOOL {
