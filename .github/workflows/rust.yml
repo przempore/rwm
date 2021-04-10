@@ -74,7 +74,7 @@ jobs:
         echo ::set-output name=upload_url::$upload_url
         
     - name: Zip artifacts
-      run: tar -czvf RWM.tar.gz artifacts/RWM
+      run: zip -r RWM.zip artifacts/RWM
 
     - name: Upload Release Asset
       id: upload-release-asset 
@@ -83,6 +83,6 @@ jobs:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       with:
         upload_url: ${{ steps.set_upload_url.outputs.upload_url }}
-        asset_path: RWM.tar.gz
-        asset_name: RWM.tar.gz
-        asset_content_type: application/tar.gz
+        asset_path: RWM.zip
+        asset_name: RWM.zip
+        asset_content_type: application/zip
