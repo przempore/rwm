@@ -158,6 +158,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "const-sha1"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "fb58b6451e8c2a812ad979ed1d83378caa5e927eef2622017a45f251457c2c9d"
+
+[[package]]
 name = "env_logger"
 version = "0.7.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -656,7 +662,7 @@ version = "0.1.0"
 dependencies = [
  "libc",
  "systray",
- "winapi",
+ "windows",
 ]
 
 [[package]]
@@ -670,6 +676,12 @@ name = "slab"
 version = "0.4.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c111b5bd5695e56cffe5129854aa230b39c93a305372fdbb2668ca2394eea9f8"
+
+[[package]]
+name = "squote"
+version = "0.1.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1fccf17fd09e2455ea796d2ad267b64fa2c5cbd8701b2a93b555d2aa73449f7d"
 
 [[package]]
 name = "strsim"
@@ -792,3 +804,39 @@ name = "winapi-x86_64-pc-windows-gnu"
 version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "712e227841d057c1ee1cd2fb22fa7e5a5461ae8e48fa2ca79ec42cfc1931183f"
+
+[[package]]
+name = "windows"
+version = "0.7.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "388ac37f05f32071485db1af226f92ee98432dc6b5ba51ebee121bf01c8e2446"
+dependencies = [
+ "const-sha1",
+ "windows_gen",
+ "windows_macros",
+]
+
+[[package]]
+name = "windows_gen"
+version = "0.7.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "91332e7e62443e735f74b6d701dcc053f26b08fa63cba5b60a6cd8b64b0cf481"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "squote",
+ "syn",
+]
+
+[[package]]
+name = "windows_macros"
+version = "0.7.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c9d7c54fe11679c0805051a5dc73b87b7abf13fefd4fdfdea9b888673a498ec8"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "squote",
+ "syn",
+ "windows_gen",
+]

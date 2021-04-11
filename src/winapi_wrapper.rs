@@ -27,7 +27,7 @@ pub fn list_all_windows() {
         EnumDesktopWindows(GetThreadDesktop(GetCurrentThreadId()), Some(enum_proc), 0);
     }
 
-    pause();
+    // pause();
 }
 
 fn is_alt_tab_window(hwnd: HWND) -> bool {
