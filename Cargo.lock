@@ -80,6 +80,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "bindings"
+version = "0.1.0"
+dependencies = [
+ "windows",
+]
+
+[[package]]
 name = "bitflags"
 version = "1.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -660,6 +667,7 @@ checksum = "08d43f7aa6b08d49f382cde6a7982047c3426db949b1424bc4b7ec9ae12c6ce2"
 name = "rwm"
 version = "0.1.0"
 dependencies = [
+ "bindings",
  "libc",
  "systray",
  "windows",
@@ -676,12 +684,6 @@ name = "slab"
 version = "0.4.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c111b5bd5695e56cffe5129854aa230b39c93a305372fdbb2668ca2394eea9f8"
-
-[[package]]
-name = "squote"
-version = "0.1.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1fccf17fd09e2455ea796d2ad267b64fa2c5cbd8701b2a93b555d2aa73449f7d"
 
 [[package]]
 name = "strsim"
@@ -807,9 +809,9 @@ checksum = "712e227841d057c1ee1cd2fb22fa7e5a5461ae8e48fa2ca79ec42cfc1931183f"
 
 [[package]]
 name = "windows"
-version = "0.7.0"
+version = "0.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "388ac37f05f32071485db1af226f92ee98432dc6b5ba51ebee121bf01c8e2446"
+checksum = "2e50fd72a86bac7e21de2ce132629b7921e57b75ed607025f850a97a7ce2aec3"
 dependencies = [
  "const-sha1",
  "windows_gen",
@@ -818,25 +820,19 @@ dependencies = [
 
 [[package]]
 name = "windows_gen"
-version = "0.7.0"
+version = "0.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "91332e7e62443e735f74b6d701dcc053f26b08fa63cba5b60a6cd8b64b0cf481"
+checksum = "b41030a241566acc784e1883355aebf4fb87bae609682a613ce62bf7639d5ec5"
 dependencies = [
- "proc-macro2",
- "quote",
- "squote",
  "syn",
 ]
 
 [[package]]
 name = "windows_macros"
-version = "0.7.0"
+version = "0.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c9d7c54fe11679c0805051a5dc73b87b7abf13fefd4fdfdea9b888673a498ec8"
+checksum = "25eb153f12764a88cd8f6898ba9b4b03b57704b26289a15c66495923d23e4208"
 dependencies = [
- "proc-macro2",
- "quote",
- "squote",
  "syn",
  "windows_gen",
 ]

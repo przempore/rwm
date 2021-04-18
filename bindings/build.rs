@@ -1,6 +1,12 @@
 fn main() {
     windows::build!(
-        windows::win32::display_devices::RECT,
-        windows::win32::windows_and_messaging::{GetWindowTextW, GetForegroundWindow, SetWindowPos, GetWindowRect}
+        Windows::Win32::WindowsStationsAndDesktops::{EnumDesktopWindows, GetThreadDesktop},
+        Windows::Win32::Dwm::{
+            DWMWINDOWATTRIBUTE,
+            DwmGetWindowAttribute,
+        },
+        Windows::Win32::Com::HRESULT,
+        Windows::Win32::WindowsAndMessaging::*,
+        Windows::Win32::SystemServices::{GetCurrentThreadId, BOOL, TRUE, PWSTR},
     )
 }
