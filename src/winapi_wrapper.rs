@@ -13,21 +13,21 @@ use winapi::{
     },
 };
 
-use std::io::{stdin, stdout, Write};
+// use std::io::{stdin, stdout, Write};
 
-fn pause() {
-    let mut stdout = stdout();
-    stdout.write(b"\nPress Enter to continue...").unwrap();
-    stdout.flush().unwrap();
-    stdin().read_line(&mut String::new()).unwrap();
-}
+// fn pause() {
+//     let mut stdout = stdout();
+//     stdout.write(b"\nPress Enter to continue...").unwrap();
+//     stdout.flush().unwrap();
+//     stdin().read_line(&mut String::new()).unwrap();
+// }
 
 pub fn list_all_windows() {
     unsafe {
         EnumDesktopWindows(GetThreadDesktop(GetCurrentThreadId()), Some(enum_proc), 0);
     }
 
-    pause();
+    // pause();
 }
 
 fn is_alt_tab_window(hwnd: HWND) -> bool {
