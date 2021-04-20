@@ -1,4 +1,5 @@
 use std::mem;
+use windows::HRESULT;
 
 use bindings::Windows::Win32::{
     Dwm::DwmGetWindowAttribute,
@@ -199,7 +200,6 @@ fn is_cloaked(hwnd: HWND) -> Result<i32, String> {
         let ret = DwmGetWindowAttribute(
             hwnd,
             14u32,
-            // DWMWINDOWATTRIBUTE::DWMWA_CLOAKED,
             &mut pv_attribute as *mut _ as *mut c_void,
             mem::size_of::<u32>() as u32,
         );
@@ -208,7 +208,7 @@ fn is_cloaked(hwnd: HWND) -> Result<i32, String> {
 
     // todo: what is wrong with it?
     match ret {
-        S_OK => Ok(pv_attribute),
+        HRESULT(0) => Ok(pv_attribute),
         _ => Err(format!("Returned HRESULT: {:?}", ret)), // an invalid handle, or type size for the given attribute?
     }
 }
