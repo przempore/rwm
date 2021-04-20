@@ -10,15 +10,6 @@ use bindings::Windows::Win32::{
 
 use core::ffi::c_void;
 
-// use std::io::{stdin, stdout, Write};
-
-// fn pause() {
-//     let mut stdout = stdout();
-//     stdout.write(b"\nPress Enter to continue...").unwrap();
-//     stdout.flush().unwrap();
-//     stdin().read_line(&mut String::new()).unwrap();
-// }
-
 pub fn list_all_windows() {
     unsafe {
         EnumDesktopWindows(
@@ -27,15 +18,9 @@ pub fn list_all_windows() {
             LPARAM(0),
         );
     }
-
-    // pause();
 }
 
 fn is_alt_tab_window(hwnd: HWND) -> bool {
-    // todo: distinguish between active desktop
-    /*
-        if (IsApplicationFrameWindow() && !HasAppropriateApplicationViewCloakType()) return false;
-    */
     if !is_visible(hwnd) {
         return false;
     }
