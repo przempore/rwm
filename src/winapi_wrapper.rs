@@ -82,15 +82,14 @@ enum WindowError {
 
 fn get_window_title(hwnd: HWND) -> Result<String, WindowError> {
     const SIZE: usize = 128;
-    let mut buf1 = [0u16; SIZE];
-    let buf = PWSTR(buf1.as_mut_ptr());
+    let mut buf = [0u16; SIZE];
 
-    let title_name_len = unsafe { GetWindowTextW(hwnd, buf, SIZE as i32) };
+    let title_name_len = unsafe { GetWindowTextW(hwnd, PWSTR(buf.as_mut_ptr()), SIZE as i32) };
     if title_name_len == 0 {
         return Err(WindowError::NotFound);
     }
 
-    let txt: Vec<u8> = buf1.iter().map(|&c| c as u8).collect();
+    let txt: Vec<u8> = buf.iter().map(|&c| c as u8).collect();
     match String::from_utf8(txt.clone()) {
         Ok(name) => Ok(format!("{}", truncate(&name, title_name_len as usize))),
         Err(_) => Ok(String::from_utf8_lossy(&txt).into_owned()),
@@ -136,11 +135,10 @@ fn truncate(s: &str, max_chars: usize) -> &str {
 fn get_class_name(hwnd: HWND) -> String {
     let mut class_name = String::new();
     const SIZE: usize = 128;
-    let mut buf1 = [0u8; SIZE];
-    let buf = PSTR(buf1.as_mut_ptr());
-    let class_name_len = unsafe { GetClassNameA(hwnd, buf, SIZE as i32) };
+    let mut buf = [0u8; SIZE];
+    let class_name_len = unsafe { GetClassNameA(hwnd, PSTR(buf.as_mut_ptr()), SIZE as i32) };
     if class_name_len > 0 {
-        let txt = buf1.iter().map(|&c| c).collect();
+        let txt = buf.iter().map(|&c| c).collect();
         class_name = String::from_utf8(txt).unwrap_or_else(|error| {
             println!("Windows title error: {}", error);
             "Incorrect window title!".to_string()
@@ -173,7 +171,6 @@ fn is_no_activate(hwnd: HWND) -> bool {
 }
 
 fn has_i_task_list_deleted_property(hwnd: HWND) -> bool {
-    // let c_to_print = String::new("ITaskList_Deleted").expect("CString::new failed");
     let mut c_to_print = String::from("ITaskList_Deleted");
     let buf = PSTR(c_to_print.as_mut_ptr());
     unsafe { !GetPropA(hwnd, buf).is_null() }
@@ -191,7 +188,6 @@ fn is_cloaked(hwnd: HWND) -> Result<i32, String> {
         (ret, pv_attribute)
     };
 
-    // todo: what is wrong with it?
     match ret {
         HRESULT(0) => Ok(pv_attribute),
         _ => Err(format!("Returned HRESULT: {:?}", ret)), // an invalid handle, or type size for the given attribute?
