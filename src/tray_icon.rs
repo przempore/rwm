@@ -17,7 +17,7 @@ pub fn show_tray_icon() -> Result<(), systray::Error> {
         return err;
     }
 
-    app.add_menu_item("List all open windows.", |_| {
+    app.add_menu_item("List all windwos.", |_| {
         list_all_windows();
         Ok::<_, systray::Error>(())
     })?;

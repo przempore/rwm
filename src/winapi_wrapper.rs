@@ -1,40 +1,83 @@
-use std::ffi::CString;
 use std::mem;
+use std::thread;
+use windows::HRESULT;
 
-use winapi::{
-    shared::{
-        minwindef::{BOOL, DWORD, LPARAM, LPVOID, TRUE},
-        windef::HWND,
-    },
-    um::{
-        dwmapi::{DwmGetWindowAttribute, DWMWA_CLOAKED},
-        processthreadsapi::GetCurrentThreadId,
-        winuser::*,
-    },
+use bindings::Windows::Win32::{
+    Debug::GetLastError,
+    DisplayDevices::POINT,
+    Dwm::DwmGetWindowAttribute,
+    SystemServices::{GetCurrentThreadId, BOOL, FALSE, HINSTANCE, LRESULT, PSTR, PWSTR, TRUE},
+    WindowsAndMessaging::*,
+    WindowsStationsAndDesktops::{EnumDesktopWindows, GetThreadDesktop},
 };
 
-// use std::io::{stdin, stdout, Write};
+use core::ffi::c_void;
 
-// fn pause() {
-//     let mut stdout = stdout();
-//     stdout.write(b"\nPress Enter to continue...").unwrap();
-//     stdout.flush().unwrap();
-//     stdin().read_line(&mut String::new()).unwrap();
-// }
+extern "system" fn on_mouse_click(code: i32, w_param: WPARAM, l_param: LPARAM) -> LRESULT {
+    if code < 0 {
+        return unsafe { CallNextHookEx(HHOOK::default(), code, w_param, l_param) };
+    }
+
+    fn get_cursor_position() -> Result<(i32, i32), u32> {
+        let mut p = POINT::default();
+        if unsafe { GetCursorPos(&mut p) == FALSE } {
+            return Err(unsafe { GetLastError() });
+        }
+
+        Ok((p.x, p.y))
+    }
+
+    match get_cursor_position() {
+        Ok((x, y)) => {
+            if w_param == WPARAM(WM_LBUTTONDOWN as usize) {
+                println!("Left mouse button pressed at position: <{},{}>", x, y);
+            } else if w_param == WPARAM(WM_RBUTTONDOWN as usize) {
+                println!("Right mouse button pressed at position: <{},{}>", x, y);
+            }
+        }
+        Err(err) => println!("Can't get mouse position. Error: {}", err),
+    };
+
+    unsafe { CallNextHookEx(HHOOK::default(), code, w_param, l_param) }
+}
+
+pub fn register_mouse_clicks() {
+    thread::spawn(move || {
+        let h_instance = HINSTANCE::default();
+        let hook = unsafe {
+            SetWindowsHookExW(
+                SetWindowsHookEx_idHook::WH_MOUSE_LL,
+                Some(on_mouse_click),
+                h_instance,
+                0,
+            )
+        };
+
+        if hook.is_null() {
+            println!("Can't set windows hook. Error: {}", unsafe {
+                GetLastError()
+            });
+        }
+
+        unsafe { GetMessageW(&mut MSG::default(), HWND::default(), 0, 0) };
+
+        unsafe {
+            UnhookWindowsHookEx(hook);
+        }
+    });
+}
 
 pub fn list_all_windows() {
     unsafe {
-        EnumDesktopWindows(GetThreadDesktop(GetCurrentThreadId()), Some(enum_proc), 0);
+        EnumDesktopWindows(
+            GetThreadDesktop(GetCurrentThreadId()),
+            Some(enum_proc),
+            LPARAM(0),
+        );
     }
-
-    // pause();
 }
 
 fn is_alt_tab_window(hwnd: HWND) -> bool {
-    // todo: distinguish between active desktop
-    /*
-        if (IsApplicationFrameWindow() && !HasAppropriateApplicationViewCloakType()) return false;
-    */
     if !is_visible(hwnd) {
         return false;
     }
@@ -95,13 +138,14 @@ enum WindowError {
 }
 
 fn get_window_title(hwnd: HWND) -> Result<String, WindowError> {
-    const SIZE: usize = 1024;
+    const SIZE: usize = 128;
     let mut buf = [0u16; SIZE];
 
-    let title_name_len = unsafe { GetWindowTextW(hwnd, &mut buf[0], SIZE as i32) };
+    let title_name_len = unsafe { GetWindowTextW(hwnd, PWSTR(buf.as_mut_ptr()), SIZE as i32) };
     if title_name_len == 0 {
         return Err(WindowError::NotFound);
     }
+
     let txt: Vec<u8> = buf.iter().map(|&c| c as u8).collect();
     match String::from_utf8(txt.clone()) {
         Ok(name) => Ok(format!("{}", truncate(&name, title_name_len as usize))),
@@ -125,8 +169,7 @@ fn has_appropriate_application_view_cloak_type(hwnd: HWND) -> bool {
 }
 
 fn get_window_owner(hwnd: HWND) -> Option<HWND> {
-    const GW_OWNER: u32 = 4;
-    let handle = unsafe { GetWindow(hwnd, GW_OWNER) };
+    let handle = unsafe { GetWindow(hwnd, GetWindow_uCmdFlags::GW_OWNER) };
 
     if handle.is_null() {
         return None;
@@ -148,11 +191,11 @@ fn truncate(s: &str, max_chars: usize) -> &str {
 
 fn get_class_name(hwnd: HWND) -> String {
     let mut class_name = String::new();
-    const SIZE: usize = 1024;
-    let mut buf = [0i8; SIZE];
-    let class_name_len = unsafe { GetClassNameA(hwnd, &mut buf[0], SIZE as i32) };
+    const SIZE: usize = 128;
+    let mut buf = [0u8; SIZE];
+    let class_name_len = unsafe { GetClassNameA(hwnd, PSTR(buf.as_mut_ptr()), SIZE as i32) };
     if class_name_len > 0 {
-        let txt = buf.iter().map(|&c| c as u8).collect();
+        let txt = buf.iter().map(|&c| c).collect();
         class_name = String::from_utf8(txt).unwrap_or_else(|error| {
             println!("Windows title error: {}", error);
             "Incorrect window title!".to_string()
@@ -163,27 +206,31 @@ fn get_class_name(hwnd: HWND) -> String {
 }
 
 fn is_app_window(hwnd: HWND) -> bool {
-    let flag = unsafe { GetWindowLongPtrA(hwnd, GWL_EXSTYLE) };
-    flag == WS_EX_APPWINDOW as isize
+    let flag = unsafe { GetWindowLongPtrA(hwnd, WINDOW_LONG_PTR_INDEX::GWL_EXSTYLE) };
+    let flag = WINDOW_EX_STYLE::from(flag as u32);
+    WINDOW_EX_STYLE::WS_EX_APPWINDOW == flag
 }
 
 fn is_tool_window(hwnd: HWND) -> bool {
-    let ex_style_flag = unsafe { GetWindowLongPtrA(hwnd, GWL_EXSTYLE) };
-    let mut ret = ex_style_flag == WS_EX_TOOLWINDOW as isize;
-    let style_flag = unsafe { GetWindowLongPtrA(hwnd, GWL_STYLE) };
-    ret |= style_flag == WS_EX_TOOLWINDOW as isize;
+    let ex_style_flag =
+        unsafe { GetWindowLongPtrA(hwnd, WINDOW_LONG_PTR_INDEX::GWL_EXSTYLE) as u32 };
+    let mut ret = WINDOW_EX_STYLE::from(ex_style_flag) == WINDOW_EX_STYLE::WS_EX_TOOLWINDOW;
+    let style_flag = unsafe { GetWindowLongPtrA(hwnd, WINDOW_LONG_PTR_INDEX::GWL_STYLE) as u32 };
+    ret |= WINDOW_EX_STYLE::from(style_flag) == WINDOW_EX_STYLE::WS_EX_TOOLWINDOW;
 
     ret
 }
 
 fn is_no_activate(hwnd: HWND) -> bool {
-    let ex_style_flag = unsafe { GetWindowLongPtrA(hwnd, GWL_EXSTYLE) };
-    ex_style_flag == WS_EX_NOACTIVATE as isize
+    let ex_style_flag =
+        unsafe { GetWindowLongPtrA(hwnd, WINDOW_LONG_PTR_INDEX::GWL_EXSTYLE) as u32 };
+    WINDOW_EX_STYLE::from(ex_style_flag) == WINDOW_EX_STYLE::WS_EX_NOACTIVATE
 }
 
 fn has_i_task_list_deleted_property(hwnd: HWND) -> bool {
-    let c_to_print = CString::new("ITaskList_Deleted").expect("CString::new failed");
-    unsafe { !GetPropA(hwnd, c_to_print.as_ptr()).is_null() }
+    let mut c_to_print = String::from("ITaskList_Deleted");
+    let buf = PSTR(c_to_print.as_mut_ptr());
+    unsafe { !GetPropA(hwnd, buf).is_null() }
 }
 
 fn is_cloaked(hwnd: HWND) -> Result<i32, String> {
@@ -191,20 +238,20 @@ fn is_cloaked(hwnd: HWND) -> Result<i32, String> {
     let (ret, pv_attribute) = unsafe {
         let ret = DwmGetWindowAttribute(
             hwnd,
-            DWMWA_CLOAKED,
-            &mut pv_attribute as *mut _ as LPVOID,
-            mem::size_of::<i32>() as DWORD,
+            14u32,
+            &mut pv_attribute as *mut _ as *mut c_void,
+            mem::size_of::<u32>() as u32,
         );
         (ret, pv_attribute)
     };
 
     match ret {
-        0 => Ok(pv_attribute),                              // Wrapped attribute.
-        _ => Err(format!("Returned HRESULT: 0x{:x}", ret)), // an invalid handle, or type size for the given attribute?
+        HRESULT(0) => Ok(pv_attribute),
+        _ => Err(format!("Returned HRESULT: {:?}", ret)), // an invalid handle, or type size for the given attribute?
     }
 }
 
-unsafe extern "system" fn enum_proc(hwnd: HWND, _l_param: LPARAM) -> BOOL {
+extern "system" fn enum_proc(hwnd: HWND, _l_param: LPARAM) -> BOOL {
     if is_alt_tab_window(hwnd) {
         match get_window_title(hwnd) {
             Ok(title) => println!("-> {}", title),

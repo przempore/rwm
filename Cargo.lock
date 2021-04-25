@@ -80,6 +80,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "bindings"
+version = "0.1.0"
+dependencies = [
+ "windows",
+]
+
+[[package]]
 name = "bitflags"
 version = "1.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -156,6 +163,12 @@ dependencies = [
  "unicode-width",
  "vec_map",
 ]
+
+[[package]]
+name = "const-sha1"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "fb58b6451e8c2a812ad979ed1d83378caa5e927eef2622017a45f251457c2c9d"
 
 [[package]]
 name = "env_logger"
@@ -654,9 +667,10 @@ checksum = "08d43f7aa6b08d49f382cde6a7982047c3426db949b1424bc4b7ec9ae12c6ce2"
 name = "rwm"
 version = "0.1.0"
 dependencies = [
+ "bindings",
  "libc",
  "systray",
- "winapi",
+ "windows",
 ]
 
 [[package]]
@@ -792,3 +806,33 @@ name = "winapi-x86_64-pc-windows-gnu"
 version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "712e227841d057c1ee1cd2fb22fa7e5a5461ae8e48fa2ca79ec42cfc1931183f"
+
+[[package]]
+name = "windows"
+version = "0.8.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2e50fd72a86bac7e21de2ce132629b7921e57b75ed607025f850a97a7ce2aec3"
+dependencies = [
+ "const-sha1",
+ "windows_gen",
+ "windows_macros",
+]
+
+[[package]]
+name = "windows_gen"
+version = "0.8.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b41030a241566acc784e1883355aebf4fb87bae609682a613ce62bf7639d5ec5"
+dependencies = [
+ "syn",
+]
+
+[[package]]
+name = "windows_macros"
+version = "0.8.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "25eb153f12764a88cd8f6898ba9b4b03b57704b26289a15c66495923d23e4208"
+dependencies = [
+ "syn",
+ "windows_gen",
+]
