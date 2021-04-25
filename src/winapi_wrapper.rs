@@ -1,14 +1,71 @@
 use std::mem;
+use std::thread;
 use windows::HRESULT;
 
 use bindings::Windows::Win32::{
+    Debug::GetLastError,
+    DisplayDevices::POINT,
     Dwm::DwmGetWindowAttribute,
-    SystemServices::{GetCurrentThreadId, BOOL, PSTR, PWSTR, TRUE},
+    SystemServices::{GetCurrentThreadId, BOOL, FALSE, HINSTANCE, LRESULT, PSTR, PWSTR, TRUE},
     WindowsAndMessaging::*,
     WindowsStationsAndDesktops::{EnumDesktopWindows, GetThreadDesktop},
 };
 
 use core::ffi::c_void;
+
+extern "system" fn on_mouse_click(code: i32, w_param: WPARAM, l_param: LPARAM) -> LRESULT {
+    if code < 0 {
+        return unsafe { CallNextHookEx(HHOOK::default(), code, w_param, l_param) };
+    }
+
+    fn get_cursor_position() -> Result<(i32, i32), u32> {
+        let mut p = POINT::default();
+        if unsafe { GetCursorPos(&mut p) == FALSE } {
+            return Err(unsafe { GetLastError() });
+        }
+
+        Ok((p.x, p.y))
+    }
+
+    match get_cursor_position() {
+        Ok((x, y)) => {
+            if w_param == WPARAM(WM_LBUTTONDOWN as usize) {
+                println!("Left mouse button pressed at position: <{},{}>", x, y);
+            } else if w_param == WPARAM(WM_RBUTTONDOWN as usize) {
+                println!("Right mouse button pressed at position: <{},{}>", x, y);
+            }
+        }
+        Err(err) => println!("Can't get mouse position. Error: {}", err),
+    };
+
+    unsafe { CallNextHookEx(HHOOK::default(), code, w_param, l_param) }
+}
+
+pub fn register_mouse_clicks() {
+    thread::spawn(move || {
+        let h_instance = HINSTANCE::default();
+        let hook = unsafe {
+            SetWindowsHookExW(
+                SetWindowsHookEx_idHook::WH_MOUSE_LL,
+                Some(on_mouse_click),
+                h_instance,
+                0,
+            )
+        };
+
+        if hook.is_null() {
+            println!("Can't set windows hook. Error: {}", unsafe {
+                GetLastError()
+            });
+        }
+
+        unsafe { GetMessageW(&mut MSG::default(), HWND::default(), 0, 0) };
+
+        unsafe {
+            UnhookWindowsHookEx(hook);
+        }
+    });
+}
 
 pub fn list_all_windows() {
     unsafe {
