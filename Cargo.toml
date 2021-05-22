@@ -10,7 +10,7 @@ edition = "2018"
 systray = "0.4.0"
 libc = "0.2.80"
 bindings = { path = "bindings" }
-windows = "0.8.0"
+windows = "0.10.0"
 
 [build-dependencies]
-windows = "0.8.0"
+windows = "0.10.0"

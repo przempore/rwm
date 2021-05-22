@@ -1,1 +1,6 @@
-/target
+target
+bindings\target
+.fingerprint
+build
+.vscode
+.idea

@@ -22,14 +22,15 @@ pub fn show_tray_icon() -> Result<(), systray::Error> {
         Ok::<_, systray::Error>(())
     })?;
 
-    app.add_menu_item("Add Menu Item", |window| {
-        window.add_menu_item("Interior item", |_| {
-            println!("what");
-            Ok::<_, systray::Error>(())
-        })?;
-        window.add_menu_separator()?;
-        Ok::<_, systray::Error>(())
-    })?;
+    // todo: adding new item to menu
+    // app.add_menu_item("Add Menu Item", |window| {
+    //     window.add_menu_item("Interior item", |_| {
+    //         println!("what");
+    //         Ok::<_, systray::Error>(())
+    //     })?;
+    //     window.add_menu_separator()?;
+    //     Ok::<_, systray::Error>(())
+    // })?;
 
     app.add_menu_separator()?;
 
