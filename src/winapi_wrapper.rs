@@ -1,5 +1,11 @@
 use std::mem;
-use std::thread;
+use std::{
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        Arc,
+    },
+    thread,
+};
 
 use windows::HRESULT;
 
@@ -10,101 +16,134 @@ use bindings::Windows::Win32::{
     System::SystemServices::{BOOL, FALSE, HINSTANCE, LRESULT, PSTR, PWSTR, TRUE},
     System::Threading::GetCurrentThreadId,
     UI::DisplayDevices::{POINT, RECT},
+    UI::KeyboardAndMouseInput::GetAsyncKeyState,
     UI::WindowsAndMessaging::*,
 };
 
 use core::ffi::c_void;
 
-extern "system" fn on_mouse_event(code: i32, w_param: WPARAM, l_param: LPARAM) -> LRESULT {
-    if code < 0 {
-        return unsafe { CallNextHookEx(HHOOK::default(), code, w_param, l_param) };
-    }
+pub struct EventInterceptor {
+    key_pressed: Arc<AtomicBool>,
+}
 
-    fn get_cursor_position() -> Result<(i32, i32), WIN32_ERROR> {
-        let mut p = POINT::default();
-        if unsafe { GetCursorPos(&mut p) == FALSE } {
-            return Err(unsafe { GetLastError() });
+impl EventInterceptor {
+    pub fn new() -> EventInterceptor {
+        EventInterceptor {
+            key_pressed: Arc::new(AtomicBool::new(false)),
         }
-
-        Ok((p.x, p.y))
     }
 
-    match get_cursor_position() {
-        Ok((x, y)) => {
-            if w_param == WPARAM(WM_LBUTTONDOWN as usize) {
-                println!("Left mouse button pressed at position: <{},{}>", x, y);
+    pub fn register_events(&self) {
+        thread::spawn(move || {
+            let h_instance = HINSTANCE::default();
+            let hook = unsafe {
+                SetWindowsHookExW(WH_MOUSE_LL, Some(Self::on_mouse_event), h_instance, 0)
+            };
 
-                // std::thread::sleep(Duration::from_millis(150));
-                // let hwnd = unsafe { GetForegroundWindow() };
-                // let title = get_window_title(hwnd);
-                // println!("{:?}", title);
-            } else if w_param == WPARAM(WM_RBUTTONDOWN as usize) {
-                println!("Right mouse button pressed at position: <{},{}>", x, y);
-                // } else if w_param == WPARAM(WM_MBUTTONDOWN) {
-                //     list_all_windows();
+            println!("hook: {:?}", hook);
+
+            if hook.is_null() {
+                println!("Can't set windows hook. Error: {:?}", unsafe {
+                    GetLastError()
+                });
             }
-        }
-        Err(err) => println!("Can't get mouse position. Error: {:?}", err),
-    };
 
-    unsafe { CallNextHookEx(HHOOK::default(), code, w_param, l_param) }
-}
+            unsafe { GetMessageW(&mut MSG::default(), HWND::default(), 0, 0) };
 
-pub fn register_mouse_clicks() {
-    thread::spawn(move || {
-        let h_instance = HINSTANCE::default();
-        let hook = unsafe { SetWindowsHookExW(WH_MOUSE_LL, Some(on_mouse_event), h_instance, 0) };
+            unsafe {
+                UnhookWindowsHookEx(hook);
+            }
+        });
 
-        if hook.is_null() {
-            println!("Can't set windows hook. Error: {:?}", unsafe {
-                GetLastError()
-            });
-        }
+        thread::spawn(move || {
+            let h_instance = HINSTANCE::default();
+            let hook = unsafe {
+                SetWindowsHookExW(WH_KEYBOARD_LL, Some(Self::on_keyboard_event), h_instance, 0)
+            };
 
-        unsafe { GetMessageW(&mut MSG::default(), HWND::default(), 0, 0) };
+            if hook.is_null() {
+                println!("Can't set windows hook. Error: {:?}", unsafe {
+                    GetLastError()
+                });
+            }
 
-        unsafe {
-            UnhookWindowsHookEx(hook);
-        }
-    });
-}
+            let mut msg = MSG::default();
+            let hwnd = HWND::default();
+            unsafe { GetMessageW(&mut msg, hwnd, 0, 0) };
+            println!("msg: {:?}", msg);
+            println!("hwnd: {:?}", hwnd);
 
-extern "system" fn on_keyboard_event(code: i32, w_param: WPARAM, l_param: LPARAM) -> LRESULT {
-    if code < 0 {
-        return unsafe { CallNextHookEx(HHOOK::default(), code, w_param, l_param) };
+            unsafe {
+                UnhookWindowsHookEx(hook);
+            }
+        });
     }
 
-    if w_param == WPARAM(WM_KEYDOWN as usize) {
-        println!("Key pressed! code={:?}, l_param={:?}", code, l_param);
-        // todo: get key code
-        // let st = l_param.as_ptr() KBDLLHOOKSTRUCT;
-    } else if w_param == WPARAM(WM_KEYUP as usize) {
-        println!("Key up! code={:?}, l_param={:?}", code, l_param);
+    extern "system" fn on_mouse_event(code: i32, w_param: WPARAM, l_param: LPARAM) -> LRESULT {
+        if code < 0 {
+            return unsafe { CallNextHookEx(HHOOK::default(), code, w_param, l_param) };
+        }
+
+        fn get_cursor_position() -> Result<(i32, i32), WIN32_ERROR> {
+            let mut p = POINT::default();
+            if unsafe { GetCursorPos(&mut p) == FALSE } {
+                return Err(unsafe { GetLastError() });
+            }
+
+            Ok((p.x, p.y))
+        }
+
+        match get_cursor_position() {
+            Ok((x, y)) => {
+                if w_param == WPARAM(WM_LBUTTONDOWN as usize) {
+                    println!("Left mouse button pressed at position: <{},{}>", x, y);
+
+                    if unsafe { GetAsyncKeyState(VK_LCONTROL as i32) != 0 } {
+                        println!("Left control button pressed!");
+                    }
+
+                    // let is_key_pressed = key_pressed.clone();
+
+                    // if is_key_pressed.load(Ordering::Relaxed) {
+                    //     println!("Key pressed and button pressed!");
+                    // }
+                    // std::thread::sleep(Duration::from_millis(150));
+                    // let hwnd = unsafe { GetForegroundWindow() };
+                    // let title = get_window_title(hwnd);
+                    // println!("{:?}", title);
+                } else if w_param == WPARAM(WM_RBUTTONDOWN as usize) {
+                    println!("Right mouse button pressed at position: <{},{}>", x, y);
+                    // } else if w_param == WPARAM(WM_MBUTTONDOWN) {
+                    //     list_all_windows();
+                }
+            }
+            Err(err) => println!("Can't get mouse position. Error: {:?}", err),
+        };
+
+        unsafe { CallNextHookEx(HHOOK::default(), code, w_param, l_param) }
     }
 
-    unsafe { CallNextHookEx(HHOOK::default(), code, w_param, l_param) }
-}
-
-// todo: figure out how to catch keyboard events and mouse events to catch event: Win key + Left mouse button pressed.
-pub fn register_keyboard_clicks() {
-    thread::spawn(move || {
-        let h_instance = HINSTANCE::default();
-        let hook =
-            unsafe { SetWindowsHookExW(WH_KEYBOARD_LL, Some(on_keyboard_event), h_instance, 0) };
-
-        if hook.is_null() {
-            println!("Can't set windows hook. Error: {:?}", unsafe {
-                GetLastError()
-            });
+    extern "system" fn on_keyboard_event(code: i32, w_param: WPARAM, l_param: LPARAM) -> LRESULT {
+        if code < 0 {
+            return unsafe { CallNextHookEx(HHOOK::default(), code, w_param, l_param) };
         }
 
-        unsafe { GetMessageW(&mut MSG::default(), HWND::default(), 0, 0) };
+        // let is_key_pressed = KEY_PRESSED.clone();
 
-        unsafe {
-            UnhookWindowsHookEx(hook);
+        if w_param == WPARAM(WM_KEYDOWN as usize) {
+            println!("Key pressed! code={:?}, l_param={:?}", code, l_param);
+            // todo: get key code
+            // let st = l_param.as_ptr() KBDLLHOOKSTRUCT;
+            // is_key_pressed.store(true, Ordering::Relaxed);
+        } else if w_param == WPARAM(WM_KEYUP as usize) {
+            // is_key_pressed.store(false, Ordering::Relaxed);
+            println!("Key up! code={:?}, l_param={:?}", code, l_param);
         }
-    });
+        unsafe { CallNextHookEx(HHOOK::default(), code, w_param, l_param) }
+    }
 }
+
+// static KEY_PRESSED: Arc<AtomicBool> = Arc::new(AtomicBool::new(false));
 
 pub fn list_all_windows() {
     unsafe {
@@ -142,6 +181,10 @@ fn get_window_rect(hwnd: HWND) -> Result<Rect, String> {
 
 fn is_alt_tab_window(hwnd: HWND) -> bool {
     if !is_visible(hwnd) {
+        return false;
+    }
+
+    if is_iconic(hwnd) {
         return false;
     }
 

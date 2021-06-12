@@ -7,5 +7,6 @@ fn main() {
          Windows::Win32::System::Threading::GetCurrentThreadId,
          Windows::Win32::System::SystemServices::{BOOL, FALSE, TRUE, PWSTR, PSTR, LRESULT, HINSTANCE},
          Windows::Win32::System::Diagnostics::Debug::{GetLastError, WIN32_ERROR},
+         Windows::Win32::UI::KeyboardAndMouseInput::GetAsyncKeyState,
     )
 }
