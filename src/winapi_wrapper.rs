@@ -10,13 +10,12 @@ use std::{
 use windows::HRESULT;
 
 use bindings::Windows::Win32::{
+    Foundation::{BOOL, HINSTANCE, HWND, LRESULT, POINT, PSTR, PWSTR, RECT},
     Graphics::Dwm::DwmGetWindowAttribute,
     System::Diagnostics::Debug::{GetLastError, WIN32_ERROR},
     System::StationsAndDesktops::{EnumDesktopWindows, GetThreadDesktop},
-    System::SystemServices::{BOOL, FALSE, HINSTANCE, LRESULT, PSTR, PWSTR, TRUE},
     System::Threading::GetCurrentThreadId,
-    UI::DisplayDevices::{POINT, RECT},
-    UI::KeyboardAndMouseInput::GetAsyncKeyState,
+    UI::KeyboardAndMouseInput::{GetAsyncKeyState, GetKeyState},
     UI::WindowsAndMessaging::*,
 };
 
@@ -39,8 +38,6 @@ impl EventInterceptor {
             let hook = unsafe {
                 SetWindowsHookExW(WH_MOUSE_LL, Some(Self::on_mouse_event), h_instance, 0)
             };
-
-            println!("hook: {:?}", hook);
 
             if hook.is_null() {
                 println!("Can't set windows hook. Error: {:?}", unsafe {
@@ -67,11 +64,7 @@ impl EventInterceptor {
                 });
             }
 
-            let mut msg = MSG::default();
-            let hwnd = HWND::default();
-            unsafe { GetMessageW(&mut msg, hwnd, 0, 0) };
-            println!("msg: {:?}", msg);
-            println!("hwnd: {:?}", hwnd);
+            unsafe { GetMessageW(&mut MSG::default(), HWND::default(), 0, 0) };
 
             unsafe {
                 UnhookWindowsHookEx(hook);
@@ -86,7 +79,7 @@ impl EventInterceptor {
 
         fn get_cursor_position() -> Result<(i32, i32), WIN32_ERROR> {
             let mut p = POINT::default();
-            if unsafe { GetCursorPos(&mut p) == FALSE } {
+            if unsafe { GetCursorPos(&mut p).as_bool() == false } {
                 return Err(unsafe { GetLastError() });
             }
 
@@ -96,9 +89,11 @@ impl EventInterceptor {
         match get_cursor_position() {
             Ok((x, y)) => {
                 if w_param == WPARAM(WM_LBUTTONDOWN as usize) {
-                    println!("Left mouse button pressed at position: <{},{}>", x, y);
+                    // println!("Left mouse button pressed at position: <{},{}>", x, y);
 
-                    if unsafe { GetAsyncKeyState(VK_LCONTROL as i32) != 0 } {
+                    let was_pressed = unsafe { GetAsyncKeyState(VK_LCONTROL as i32) };
+                    println!("was_pressed {}", was_pressed);
+                    if was_pressed == -32767 {
                         println!("Left control button pressed!");
                     }
 
@@ -112,7 +107,7 @@ impl EventInterceptor {
                     // let title = get_window_title(hwnd);
                     // println!("{:?}", title);
                 } else if w_param == WPARAM(WM_RBUTTONDOWN as usize) {
-                    println!("Right mouse button pressed at position: <{},{}>", x, y);
+                    // println!("Right mouse button pressed at position: <{},{}>", x, y);
                     // } else if w_param == WPARAM(WM_MBUTTONDOWN) {
                     //     list_all_windows();
                 }
@@ -131,13 +126,13 @@ impl EventInterceptor {
         // let is_key_pressed = KEY_PRESSED.clone();
 
         if w_param == WPARAM(WM_KEYDOWN as usize) {
-            println!("Key pressed! code={:?}, l_param={:?}", code, l_param);
+            // println!("Key pressed! code={:?}, l_param={:?}", code, l_param);
             // todo: get key code
             // let st = l_param.as_ptr() KBDLLHOOKSTRUCT;
             // is_key_pressed.store(true, Ordering::Relaxed);
         } else if w_param == WPARAM(WM_KEYUP as usize) {
             // is_key_pressed.store(false, Ordering::Relaxed);
-            println!("Key up! code={:?}, l_param={:?}", code, l_param);
+            // println!("Key up! code={:?}, l_param={:?}", code, l_param);
         }
         unsafe { CallNextHookEx(HHOOK::default(), code, w_param, l_param) }
     }
@@ -165,7 +160,7 @@ struct Rect {
 
 fn get_window_rect(hwnd: HWND) -> Result<Rect, String> {
     let mut rect = RECT::default();
-    let got_rect = unsafe { GetWindowRect(hwnd, &mut rect) == TRUE };
+    let got_rect = unsafe { GetWindowRect(hwnd, &mut rect).as_bool() == true };
 
     if !got_rect {
         return Err(format!("Can't get rect."));
@@ -235,7 +230,7 @@ fn is_alt_tab_window(hwnd: HWND) -> bool {
 }
 
 fn is_visible(hwnd: HWND) -> bool {
-    unsafe { IsWindowVisible(hwnd) == TRUE }
+    unsafe { IsWindowVisible(hwnd).as_bool() == true }
 }
 
 #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
@@ -285,7 +280,7 @@ fn get_window_owner(hwnd: HWND) -> Option<HWND> {
 }
 
 fn is_iconic(hwnd: HWND) -> bool {
-    unsafe { IsIconic(hwnd) == TRUE }
+    unsafe { IsIconic(hwnd).as_bool() == true }
 }
 
 fn truncate(s: &str, max_chars: usize) -> &str {
@@ -368,5 +363,5 @@ extern "system" fn enum_proc(hwnd: HWND, _l_param: LPARAM) -> BOOL {
         };
     }
 
-    TRUE
+    BOOL::from(true)
 }
