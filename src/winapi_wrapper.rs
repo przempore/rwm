@@ -10,7 +10,7 @@ use std::{
 use windows::HRESULT;
 
 use bindings::Windows::Win32::{
-    Foundation::{BOOL, HINSTANCE, HWND, LRESULT, POINT, PSTR, PWSTR, RECT},
+    Foundation::{BOOL, HINSTANCE, HWND, LPARAM, LRESULT, POINT, PSTR, PWSTR, RECT, WPARAM},
     Graphics::Dwm::DwmGetWindowAttribute,
     System::Diagnostics::Debug::{GetLastError, WIN32_ERROR},
     System::StationsAndDesktops::{EnumDesktopWindows, GetThreadDesktop},
@@ -89,14 +89,12 @@ impl EventInterceptor {
         match get_cursor_position() {
             Ok((x, y)) => {
                 if w_param == WPARAM(WM_LBUTTONDOWN as usize) {
-                    // println!("Left mouse button pressed at position: <{},{}>", x, y);
-
-                    let was_pressed = unsafe { GetAsyncKeyState(VK_LCONTROL as i32) };
-                    println!("was_pressed {}", was_pressed);
-                    if was_pressed == -32767 {
+                    let is_pressed = unsafe { GetKeyState(VK_LCONTROL as i32) };
+                    // https://devblogs.microsoft.com/oldnewthing/20041130-00/?p=37173
+                    let pressed = 0b10000000;
+                    if (is_pressed & pressed) == pressed {
                         println!("Left control button pressed!");
                     }
-
                     // let is_key_pressed = key_pressed.clone();
 
                     // if is_key_pressed.load(Ordering::Relaxed) {
@@ -345,8 +343,8 @@ fn is_cloaked(hwnd: HWND) -> Result<i32, String> {
     };
 
     match ret {
-        HRESULT(0) => Ok(pv_attribute),
-        _ => Err(format!("Returned HRESULT: {:?}", ret)), // an invalid handle, or type size for the given attribute?
+        Ok(()) => Ok(pv_attribute),
+        _ => Err(format!("Returned: {:?}", ret)), // an invalid handle, or type size for the given attribute?
     }
 }
 
